@@ -1,0 +1,312 @@
+{
+  "info": {
+    "_postman_id": "b7e1c2a4-1f3d-4c8a-9e2b-0a1c2d3e4f50",
+    "name": "Saas.OrganisationDomain API",
+    "description": "Exercises JWT auth (FT1) and the protected Organisation endpoints.\n\nQuick start:\n1. Import this collection.\n2. Run the API locally (defaults to http://localhost:5119) so the dev API key is seeded.\n3. Send \"Auth / 1. Get tokens\" first — its test script stores the access + refresh tokens as collection variables that the other requests reuse.\n4. Or use the Collection Runner / `newman run` to execute everything in order.\n\nThe `apiKey` variable is the dev-only seeded key; only its SHA-256 hash is stored server-side.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "1. Get tokens (POST /api/auth/token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns an access token', () => pm.expect(body.accessToken).to.be.a('string').and.not.empty);",
+                  "pm.test('access token expires in 900s (15 min)', () => pm.expect(body.expiresIn).to.eql(900));",
+                  "pm.test('refresh token expires in 604800s (7 days)', () => pm.expect(body.refreshExpiresIn).to.eql(604800));",
+                  "pm.test('token type is Bearer', () => pm.expect(body.tokenType).to.eql('Bearer'));",
+                  "pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', body.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key", "value": "{{apiKey}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/token",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "token"]
+            },
+            "description": "Exchanges the seeded X-Api-Key for an access + refresh token pair."
+          }
+        },
+        {
+          "name": "2. Get tokens - invalid key (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('unknown key is rejected with 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Key", "value": "not-a-real-key" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/token",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "token"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organisation",
+      "item": [
+        {
+          "name": "3. Get organisation - own org (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('own org returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [ { "key": "token", "value": "{{accessToken}}" } ]
+            },
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/organisation/ORG-001",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "organisation", "ORG-001"]
+            },
+            "description": "The token's org claim (ORG-001) matches the route, so access is allowed."
+          }
+        },
+        {
+          "name": "4. Get organisation - other org (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('cross-tenant access returns 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [ { "key": "token", "value": "{{accessToken}}" } ]
+            },
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/organisation/ORG-999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "organisation", "ORG-999"]
+            },
+            "description": "A token scoped to ORG-001 cannot read ORG-999."
+          }
+        },
+        {
+          "name": "5. Get organisation - no token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('missing bearer token returns 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/organisation/ORG-001",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "organisation", "ORG-001"]
+            }
+          }
+        },
+        {
+          "name": "6. Create organisation - matching ref (201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('creating own org returns 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [ { "key": "token", "value": "{{accessToken}}" } ]
+            },
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reference\": \"ORG-001\",\n  \"name\": \"Acme Holdings Ltd\",\n  \"tradingName\": \"Acme\",\n  \"type\": \"Company\",\n  \"status\": \"Active\",\n  \"registrationNumber\": \"12345678\",\n  \"taxNumber\": \"GB123456789\",\n  \"incorporationDate\": \"2010-06-15\",\n  \"registeredAddress\": {\n    \"line1\": \"1 High Street\",\n    \"line2\": \"Suite 200\",\n    \"city\": \"London\",\n    \"region\": \"Greater London\",\n    \"postalCode\": \"EC1A 1BB\",\n    \"country\": \"GB\"\n  },\n  \"tradingAddress\": null,\n  \"contact\": {\n    \"email\": \"hello@acme.example\",\n    \"phone\": \"+44 20 7946 0000\",\n    \"website\": \"https://acme.example\"\n  },\n  \"industry\": \"Software\",\n  \"employeeCount\": 120,\n  \"annualRevenue\": 5400000.00,\n  \"currency\": \"GBP\",\n  \"createdAt\": \"2026-05-25T10:00:00Z\",\n  \"updatedAt\": \"2026-05-25T10:00:00Z\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/organisation",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "organisation"]
+            },
+            "description": "Body reference matches the token's org claim."
+          }
+        },
+        {
+          "name": "7. Create organisation - mismatched ref (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('creating another org returns 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [ { "key": "token", "value": "{{accessToken}}" } ]
+            },
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reference\": \"ORG-999\",\n  \"name\": \"Someone Else Ltd\",\n  \"type\": \"Company\",\n  \"status\": \"Active\",\n  \"registeredAddress\": {\n    \"line1\": \"1 Other Road\",\n    \"line2\": null,\n    \"city\": \"London\",\n    \"region\": null,\n    \"postalCode\": \"EC1A 1BB\",\n    \"country\": \"GB\"\n  },\n  \"contact\": { \"email\": null, \"phone\": null, \"website\": null },\n  \"createdAt\": \"2026-05-25T10:00:00Z\",\n  \"updatedAt\": \"2026-05-25T10:00:00Z\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/organisation",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "organisation"]
+            },
+            "description": "Body reference differs from the token's org claim."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth - refresh flow",
+      "item": [
+        {
+          "name": "8. Refresh (POST /api/auth/refresh)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Remember the token we are about to rotate so the reuse test can replay it.",
+                  "pm.collectionVariables.set('previousRefreshToken', pm.collectionVariables.get('refreshToken'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('refresh returns 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('a new refresh token is issued', () => pm.expect(body.refreshToken).to.not.eql(pm.collectionVariables.get('previousRefreshToken')));",
+                  "pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', body.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"refreshToken\": \"{{refreshToken}}\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "refresh"]
+            },
+            "description": "Rotates the refresh token: the presented token is revoked and a fresh pair is returned."
+          }
+        },
+        {
+          "name": "9. Refresh - reuse rotated token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('reusing a rotated refresh token returns 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"refreshToken\": \"{{previousRefreshToken}}\" }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "refresh"]
+            },
+            "description": "Replaying the already-rotated token is detected as reuse and revokes the rotation chain."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5119", "type": "string" },
+    { "key": "apiKey", "value": "sk_test_dev_organisation_001", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" },
+    { "key": "refreshToken", "value": "", "type": "string" },
+    { "key": "previousRefreshToken", "value": "", "type": "string" }
+  ]
+}
